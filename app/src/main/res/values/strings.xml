@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">ペンラシーターＺ</string>
+    <string name="save_png_successful">保存しました</string>
+    <string name="save_png_failure">保存できませんでした</string>
+    <string name="reject_grant_permission">拒否されました</string>
+    <string name="dialog_title_stop_drawing_canvas">作成の終了</string>
+    <string name="dialog_message_stop_drawing_canvas">編集内容は保存されません。終了してもよろしいですか？</string>
+    <string name="dialog_button_cancel">キャンセル</string>
+    <string name="dialog_button_stop_drawing_canvas">終了</string>
 </resources>
