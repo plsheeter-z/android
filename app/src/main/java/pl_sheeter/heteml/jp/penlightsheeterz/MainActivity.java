@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -20,11 +21,11 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
-import android.os.Handler;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -39,7 +40,6 @@ public class MainActivity extends Activity {
     public static final String PENLIGHT_SHEETER_TOP_URL = "http://souseiji.heteml.jp/kingbz/";
 
     private WebView psWebView;
-    private Handler handler = new Handler();
     private String dataUri = null;
 
     @Override
@@ -48,34 +48,22 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         psWebView = (WebView) findViewById(R.id.webview_penlight_sheeter);
-        psWebView.addJavascriptInterface(this, "MainActivity");
-
         WebSettings settings = psWebView.getSettings();
+
+
+        // add Javascript Interface
         settings.setJavaScriptEnabled(true);
+        psWebView.addJavascriptInterface(new PenlightJavascriptInterface(this), "Penlight");
+
+
+
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setAllowUniversalAccessFromFileURLs(true);
 
-        psWebView.setWebViewClient(new WebViewClient(){
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                if (Build.VERSION.SDK_INT < 24) {
-                    Log.d(LOG_DEBUG_HEADER, "Under API Level 24, Remove 'download' Attribute from JavascriptInterface");
-                    view.loadUrl("javascript:window.MainActivity.jsInterFace(document.getElementById('dllink').removeAttribute('download'));");
-                }
-            }
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith(DATA_URI_PNG_HEADER)) {
-                    Log.d(LOG_DEBUG_HEADER, "Start dllink from shouldOverrideUrlLoading Method");
-                    onClickDllink(url);
-                } else {
-                    view.loadUrl(url);
-                }
+        psWebView.setWebChromeClient(new WebChromeClient());
+        psWebView.setWebViewClient(new CustomWebViewClient());
 
-                return true;
-            }
-        });
+
+
         psWebView.setDownloadListener(new DownloadListener() {
             @Override
             public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
@@ -88,6 +76,9 @@ public class MainActivity extends Activity {
             }
         });
 
+
+
+
         if (savedInstanceState != null) {
             ((WebView) findViewById(R.id.webview_penlight_sheeter)).restoreState(savedInstanceState);
             return;
@@ -96,13 +87,78 @@ public class MainActivity extends Activity {
         psWebView.loadUrl(PENLIGHT_SHEETER_TOP_URL);
     }
 
-    @JavascriptInterface
-    public void jsInterFace(final String src) {
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
+    private class PenlightJavascriptInterface{
+        Context mContext;
+        PenlightJavascriptInterface(Context c) {
+            mContext = c;
+        }
+
+        @JavascriptInterface
+        public void sendDataURI(String uri) {
+            if (uri.startsWith(DATA_URI_PNG_HEADER)) {
+                Log.d(LOG_DEBUG_HEADER, "Start dllink from shouldOverrideUrlLoading Method");
+                onClickDllink(uri);
             }
-        });
+        }
+    }
+
+    private class CustomWebViewClient extends WebViewClient {
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
+            view.getSettings().setJavaScriptEnabled(true);
+            view.setWebChromeClient(new WebChromeClient());
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                view.evaluateJavascript(
+                        "(function(){document.getElementById('dllink').removeAttribute('download')})();",
+                        null
+                );
+            } else {
+                view.loadUrl("javascript:document.getElementById('dllink').removeAttribute('download');");
+            }
+
+        }
+        @Override
+        public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            System.out.println("#### should : " + url);
+
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+//                view.evaluateJavascript(
+//                        "(function(){var data = document.getElementById('uri-data').getAttribute('data');return data;})();",
+//                        new ValueCallback<String>() {
+//                            @Override
+//                            public void onReceiveValue(String value) {
+//                                String dataUri = value.substring(1, value.length() - 1);
+//                                System.out.println("#### : " + dataUri);
+//                                if (dataUri.startsWith(DATA_URI_PNG_HEADER)) {
+//
+//                                    Log.d(LOG_DEBUG_HEADER, "Start dllink from shouldOverrideUrlLoading Method");
+//                                    onClickDllink(dataUri);
+//                                }
+//
+//                            }
+//                        }
+//                );
+//            }
+
+
+//            if (url.endsWith("?param=edited")) {
+//                view.loadUrl("#");
+//            } else {
+                view.loadUrl(url);
+//            }
+
+
+//            if (url.startsWith(DATA_URI_PNG_HEADER)) {
+//                Log.d(LOG_DEBUG_HEADER, "Start dllink from shouldOverrideUrlLoading Method");
+//                onClickDllink(url);
+//            } else {
+//                view.loadUrl(url);
+//            }
+
+            return false;
+        }
     }
 
     @Override
