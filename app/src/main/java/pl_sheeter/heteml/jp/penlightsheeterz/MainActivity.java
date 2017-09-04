@@ -3,6 +3,7 @@ package pl_sheeter.heteml.jp.penlightsheeterz;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -13,13 +14,13 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Handler;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
 import android.view.KeyEvent;
-import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -41,6 +42,7 @@ public class MainActivity extends Activity {
 
     private WebView psWebView;
     private String dataUri = null;
+    private ProgressDialog progressDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,35 +52,28 @@ public class MainActivity extends Activity {
         psWebView = (WebView) findViewById(R.id.webview_penlight_sheeter);
         WebSettings settings = psWebView.getSettings();
 
-
         // add Javascript Interface
         settings.setJavaScriptEnabled(true);
         psWebView.addJavascriptInterface(new PenlightJavascriptInterface(this), "Penlight");
-
-
 
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
         psWebView.setWebChromeClient(new WebChromeClient());
         psWebView.setWebViewClient(new CustomWebViewClient());
 
+//        psWebView.setDownloadListener(new DownloadListener() {
+//            @Override
+//            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+//                if (url.startsWith(DATA_URI_PNG_HEADER)) {
+//                    Log.d(LOG_DEBUG_HEADER, "Start dllink from DownloadListener");
+//                    onClickDllink(url);
+//                } else {
+//                    psWebView.loadUrl(url);
+//                }
+//            }
+//        });
 
-
-        psWebView.setDownloadListener(new DownloadListener() {
-            @Override
-            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
-                if (url.startsWith(DATA_URI_PNG_HEADER)) {
-                    Log.d(LOG_DEBUG_HEADER, "Start dllink from DownloadListener");
-                    onClickDllink(url);
-                } else {
-                    psWebView.loadUrl(url);
-                }
-            }
-        });
-
-
-
-
+        // 画面回転対応
         if (savedInstanceState != null) {
             ((WebView) findViewById(R.id.webview_penlight_sheeter)).restoreState(savedInstanceState);
             return;
@@ -96,68 +91,27 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void sendDataURI(String uri) {
             if (uri.startsWith(DATA_URI_PNG_HEADER)) {
-                Log.d(LOG_DEBUG_HEADER, "Start dllink from shouldOverrideUrlLoading Method");
-                onClickDllink(uri);
+                dataUri = uri;
+                onClickDllink();
+            } else {
+                Toast.makeText(MainActivity.this, R.string.save_png_failure, Toast.LENGTH_SHORT).show();
             }
         }
     }
 
     private class CustomWebViewClient extends WebViewClient {
         @Override
-        public void onPageFinished(WebView view, String url) {
-            super.onPageFinished(view, url);
-            view.getSettings().setJavaScriptEnabled(true);
-            view.setWebChromeClient(new WebChromeClient());
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                view.evaluateJavascript(
-                        "(function(){document.getElementById('dllink').removeAttribute('download')})();",
-                        null
-                );
-            } else {
-                view.loadUrl("javascript:document.getElementById('dllink').removeAttribute('download');");
-            }
-
-        }
-        @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            System.out.println("#### should : " + url);
-
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-//                view.evaluateJavascript(
-//                        "(function(){var data = document.getElementById('uri-data').getAttribute('data');return data;})();",
-//                        new ValueCallback<String>() {
-//                            @Override
-//                            public void onReceiveValue(String value) {
-//                                String dataUri = value.substring(1, value.length() - 1);
-//                                System.out.println("#### : " + dataUri);
-//                                if (dataUri.startsWith(DATA_URI_PNG_HEADER)) {
-//
-//                                    Log.d(LOG_DEBUG_HEADER, "Start dllink from shouldOverrideUrlLoading Method");
-//                                    onClickDllink(dataUri);
-//                                }
-//
-//                            }
-//                        }
-//                );
-//            }
-
-
-//            if (url.endsWith("?param=edited")) {
-//                view.loadUrl("#");
-//            } else {
-                view.loadUrl(url);
-//            }
-
-
-//            if (url.startsWith(DATA_URI_PNG_HEADER)) {
-//                Log.d(LOG_DEBUG_HEADER, "Start dllink from shouldOverrideUrlLoading Method");
-//                onClickDllink(url);
-//            } else {
-//                view.loadUrl(url);
-//            }
-
+            view.loadUrl(url);
             return false;
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (progressDialog != null) {
+            progressDialog.dismiss();
         }
     }
 
@@ -224,8 +178,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void onClickDllink(final String dataUri) {
-        this.dataUri = dataUri;
+    private void onClickDllink() {
         if (Build.VERSION.SDK_INT >= 23) {
             if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 Log.d(LOG_DEBUG_HEADER, "Over API Level 23, not grant WRITE_EXTERNAL_STRAGE Permission to save smart phone");
@@ -245,13 +198,34 @@ public class MainActivity extends Activity {
     }
 
     private void saveSmartPhone() {
-        String absolutePath = savePNG(dataUri);
-        if (!absolutePath.isEmpty()) {
-            addGallery(absolutePath);
-            Toast.makeText(MainActivity.this, R.string.save_png_successful, Toast.LENGTH_LONG).show();
-        } else {
-            Toast.makeText(MainActivity.this, R.string.save_png_failure, Toast.LENGTH_LONG).show();
-        }
+        progressDialog = new ProgressDialog(MainActivity.this);
+        progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+        progressDialog.setMessage("保存しています");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+
+        final Handler handler = new Handler();
+
+        new Thread(new Runnable() {
+
+            @Override
+            public void run() {
+                String absolutePath = savePNG(dataUri);
+
+                if (!absolutePath.isEmpty()) {
+                    addGallery(absolutePath);
+                }
+
+                progressDialog.dismiss();
+                handler.post(new Runnable() {
+
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, R.string.save_png_successful, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        }).start();
     }
 
     private String savePNG(final String base64Character) {
