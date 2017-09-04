@@ -38,7 +38,7 @@ public class MainActivity extends Activity {
 
     public static final String DATA_URI_PNG_HEADER = "data:image/png;base64,";
     public static final String LOG_DEBUG_HEADER = "Personal.out";
-    public static final String PENLIGHT_SHEETER_TOP_URL = "http://souseiji.heteml.jp/kingbz/";
+    public static final String PENLIGHT_SHEETER_TOP_URL = "https://pl-sheeter.heteml.net/";
 
     private WebView psWebView;
     private String dataUri = null;
